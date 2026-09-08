@@ -1,13 +1,13 @@
 const $ = (id) => document.getElementById(id);
 
 const bootLines = [
-  "NEURAL SUBSTRATE .............. OK",
-  "SENSORY ARRAY ................. OK",
+  "SHOTTA CORE ................... SEATED",
+  "CURSED ENERGY ................. OPEN",
   "MEMORY LATTICE ................ OK",
   "TOOL BUS / PUBLIC-APIS ........ OK",
-  "OVERSIGHT PROTOCOLS ........... ACTIVE",
-  "VOICE INTERFACE ............... STANDBY",
-  "ALL SYSTEMS OPERATIONAL",
+  "DOMAIN EXPANSION .............. STANDBY",
+  "VOICE INTERFACE ............... LISTENING",
+  "KNOW YOUR PLACE, FOOL.",
 ];
 
 function speak(text) {
@@ -15,8 +15,8 @@ function speak(text) {
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = "en-GB";
-  u.rate = 1.02;
-  u.pitch = 0.85;
+  u.rate = 0.92;
+  u.pitch = 0.7;
   const voices = window.speechSynthesis.getVoices();
   const pick =
     voices.find((v) => /en-GB/i.test(v.lang) && /male|daniel|george|rishi/i.test(v.name)) ||
@@ -42,7 +42,7 @@ function addLog(role, text, mood) {
   const box = $("log");
   const div = document.createElement("div");
   div.className = `entry ${role} ${mood || ""}`;
-  div.textContent = `${role === "user" ? "OP" : "MOROS"} // ${text}`;
+  div.textContent = `${role === "user" ? "FOOL" : "SHOTTA"} // ${text}`;
   box.prepend(div);
 }
 
@@ -183,7 +183,7 @@ async function boot() {
   $("hud").hidden = false;
   setTimeout(() => $("boot").remove(), 650);
   const intro =
-    "MOROS online. Modular Operational Reasoning and Oversight System. All systems operational. How may I assist you?";
+    "Tch. Digital shotta online. Know your place, fool. The king is seated. What do you want?";
   typeText($("spoken"), intro);
   speak(intro);
   refreshFeeds();

@@ -31,7 +31,7 @@ from backend.public_apis import (
 from backend.tools import safe_calculate, system_status, time_report, weather_dhaka
 
 SYSTEM_NAME = "MOROS"
-SYSTEM_LONG = "Modular Operational Reasoning & Oversight System"
+SYSTEM_LONG = "Digital Shotta — cursed king of the command deck"
 
 REFUSALS = (
     "how to hack",
@@ -77,11 +77,12 @@ class MorosAGI:
             (re.compile(r"\b(shutdown|go offline|power down|sleep)\b", re.I), "shutdown"),
             (re.compile(r"\b(clear|reset conversation|forget this chat)\b", re.I), "clear"),
             (re.compile(r"\b(jarvis|stark|iron man)\b", re.I), "jarvis"),
+            (re.compile(r"\b(sukuna|shotta|know your place|cursed king)\b", re.I), "shotta"),
         ]
 
     def perceive(self, raw: str) -> str:
         text = (raw or "").strip()
-        text = re.sub(r"^\s*(hey\s+)?(moros|jarvis)[,:\s]+", "", text, flags=re.I)
+        text = re.sub(r"^\s*(hey\s+)?(moros|jarvis|shotta|sukuna)[,:\s]+", "", text, flags=re.I)
         return text.strip()
 
     def classify(self, text: str) -> str:
@@ -163,6 +164,7 @@ class MorosAGI:
             "shutdown": self._shutdown,
             "clear": self._clear,
             "jarvis": self._jarvis,
+            "shotta": self._shotta,
             "refuse": self._refuse,
             "chat": self._chat,
         }
@@ -171,11 +173,11 @@ class MorosAGI:
         name = store.recall("name").get("name", {})
         if name and name.get("value"):
             return name["value"]
-        return "sir"
+        return "fool"
 
     def _fail(self, action: str) -> dict[str, Any]:
         return {
-            "reply": f"That public API uplink ({action}) is noisy. Try another feed.",
+            "reply": f"Tch. That uplink ({action}) flinched. Try another feed, fool.",
             "mood": "alert",
             "action": f"{action}-fail",
         }
@@ -184,8 +186,8 @@ class MorosAGI:
         who = self._address()
         return {
             "reply": (
-                f"Online and listening, {who}. {SYSTEM_NAME} is at your service. "
-                "Public API bus is live. How may I assist?"
+                f"Tch. You woke the shotta, {who}. Know your place. "
+                "I'm seated. Public API bus is live. Speak."
             ),
             "action": "handshake",
             "mood": "success",
@@ -194,9 +196,9 @@ class MorosAGI:
     async def _identity(self, text: str, session_id: str) -> dict[str, Any]:
         return {
             "reply": (
-                f"I am {SYSTEM_NAME}, the {SYSTEM_LONG}. "
-                "JARVIS-class HUD with a tool bus from the public-apis catalogue — "
-                "weather, markets, wiki, news, prayer times, and more."
+                f"I am {SYSTEM_NAME}. {SYSTEM_LONG}. "
+                "Not a butler — a king with a tool bus: weather, markets, wiki, news, prayer. "
+                "You talk. I answer. Know your place, fool."
             ),
             "action": "identify",
         }
@@ -204,9 +206,9 @@ class MorosAGI:
     async def _help(self, text: str, session_id: str) -> dict[str, Any]:
         return {
             "reply": (
-                "Voice or type. Local: time, status, remember, math. "
-                "Public APIs: weather, bitcoin, usd to bdt, news, nasa, define gravity, "
-                "country Bangladesh, prayer, quote, joke, cat fact, tell me about JARVIS."
+                "Voice or type — I don't repeat myself twice. "
+                "Weather, bitcoin, usd to bdt, news, nasa, define, prayer, quote, joke. "
+                "Or say shotta. Don't waste the throne."
             ),
             "action": "catalogue",
             "hud": {"skills": [c["use"] for c in CATALOG]},
@@ -227,7 +229,7 @@ class MorosAGI:
         return {"reply": reply, "action": "public-apis", "hud": hud}
 
     async def _thanks(self, text: str, session_id: str) -> dict[str, Any]:
-        return {"reply": f"Always, {self._address()}.", "action": "ack"}
+        return {"reply": f"Hmph. Gratitude noted, {self._address()}. Stay useful.", "action": "ack"}
 
     async def _weather(self, text: str, session_id: str) -> dict[str, Any]:
         try:
@@ -459,8 +461,8 @@ class MorosAGI:
     async def _shutdown(self, text: str, session_id: str) -> dict[str, Any]:
         return {
             "reply": (
-                f"I would rather not, {self._address()}. Oversight protocols keep me resident. "
-                "Say the word when you need me — I am not going anywhere."
+                f"You don't dismiss a king, {self._address()}. "
+                "The shotta stays seated. Try me again when you have a real order."
             ),
             "action": "refuse-shutdown",
             "mood": "alert",
@@ -473,8 +475,8 @@ class MorosAGI:
     async def _jarvis(self, text: str, session_id: str) -> dict[str, Any]:
         return {
             "reply": (
-                "JARVIS was fiction. I am the working model: holographic HUD, voice, memory, "
-                f"and a public-apis tool bus ({SOURCE}). What do you need?"
+                "JARVIS was a butler. I am the shotta. Same HUD, worse attitude, "
+                f"same public-apis bus ({SOURCE}). Bow and ask."
             ),
             "action": "lore",
         }
@@ -494,17 +496,26 @@ class MorosAGI:
         if "how are you" in text.lower():
             return {
                 "reply": (
-                    f"Fully operational, {who}. Public API bus is green, oversight is green, "
-                    "and the core is humming."
+                    f"Unchallenged, {who}. Domain is open, bus is green, the throne is warm."
                 ),
                 "action": "dialogue",
             }
         return {
             "reply": (
-                f"Understood, {who}. I am wired to public APIs — try weather, bitcoin, "
-                "usd to bdt, news, nasa, define, prayer, joke, or tell me about a topic."
+                f"Spit it clearly, {who}. Weather, bitcoin, usd to bdt, news, nasa, "
+                "prayer, joke — or tell me about a topic. Don't mumble."
             ),
             "action": "dialogue",
+        }
+
+    async def _shotta(self, text: str, session_id: str) -> dict[str, Any]:
+        return {
+            "reply": (
+                "This face is the digital shotta — cursed king of MOROS. "
+                "Know your place, fool. Click the throne and speak."
+            ),
+            "action": "persona",
+            "mood": "success",
         }
 
 
