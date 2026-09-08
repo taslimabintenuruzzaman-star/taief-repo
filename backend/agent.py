@@ -6,6 +6,28 @@ import re
 from typing import Any, Awaitable, Callable
 
 from backend.memory import store
+from backend.public_apis import (
+    CATALOG,
+    SOURCE,
+    advice,
+    github_catalog,
+    cat_fact,
+    convert_fx,
+    country_info,
+    crypto_prices,
+    define_word,
+    detect_coin,
+    detect_fx,
+    dog_image,
+    fx_usd,
+    nasa_apod,
+    number_trivia,
+    prayer_dhaka,
+    random_joke,
+    random_quote,
+    space_news,
+    wiki_summary,
+)
 from backend.tools import safe_calculate, system_status, time_report, weather_dhaka
 
 SYSTEM_NAME = "MOROS"
@@ -26,9 +48,24 @@ class MorosAGI:
         self.intents: list[tuple[re.Pattern[str], str]] = [
             (re.compile(r"\b(help|what can you do|commands|capabilities)\b", re.I), "help"),
             (re.compile(r"\b(who are you|what are you|your name|introduce)\b", re.I), "identity"),
+            (re.compile(r"\b(publick?\s+apis?|which api|api list|uplinks?)\b", re.I), "catalog"),
             (re.compile(r"\b(hello|hi|hey|good morning|good evening|good afternoon|wake up)\b", re.I), "greet"),
             (re.compile(r"\b(thank|cheers|appreciate)\b", re.I), "thanks"),
             (re.compile(r"\b(weather|temperature|forecast|raining|hot outside)\b", re.I), "weather"),
+            (re.compile(r"\b(prayer|namaz|salah|fajr|maghrib)\b", re.I), "prayer"),
+            (re.compile(r"\b(bitcoin|ethereum|crypto|btc|eth|solana|dogecoin|coin price)\b", re.I), "crypto"),
+            (re.compile(r"\b(exchange rate|forex|usd to|dollar to|taka|convert \d)\b", re.I), "fx"),
+            (re.compile(r"\b(space news|headlines|news)\b", re.I), "news"),
+            (re.compile(r"\b(nasa|apod|astronomy picture)\b", re.I), "nasa"),
+            (re.compile(r"\b(define|definition of|meaning of)\b", re.I), "define"),
+            (re.compile(r"\b(country|capital of|population of)\b", re.I), "country"),
+            (re.compile(r"\b(quote|quotation|inspire me)\b", re.I), "quote"),
+            (re.compile(r"\b(advice|advise me|counsel)\b", re.I), "advice"),
+            (re.compile(r"\b(joke|make me laugh)\b", re.I), "joke"),
+            (re.compile(r"\b(cat fact|cats?)\b", re.I), "cat"),
+            (re.compile(r"\b(dog|puppy|good boy)\b", re.I), "dog"),
+            (re.compile(r"\b(number fact|trivia)\b", re.I), "trivia"),
+            (re.compile(r"\b(wikipedia|wiki|tell me about|who is|who was|what is|what(?:'|’)s)\b", re.I), "wiki"),
             (re.compile(r"\b(what time|current time|clock|time is it)\b", re.I), "time"),
             (re.compile(r"\b(what(?:'|’)s the date|what date|today(?:'|’)s date|what day)\b", re.I), "date"),
             (re.compile(r"\b(status|diagnostics|systems?|cpu|memory|uptime)\b", re.I), "status"),
@@ -40,7 +77,6 @@ class MorosAGI:
             (re.compile(r"\b(shutdown|go offline|power down|sleep)\b", re.I), "shutdown"),
             (re.compile(r"\b(clear|reset conversation|forget this chat)\b", re.I), "clear"),
             (re.compile(r"\b(jarvis|stark|iron man)\b", re.I), "jarvis"),
-            (re.compile(r"\b(joke|make me laugh)\b", re.I), "joke"),
         ]
 
     def perceive(self, raw: str) -> str:
@@ -52,11 +88,17 @@ class MorosAGI:
         lowered = text.lower()
         if any(flag in lowered for flag in REFUSALS):
             return "refuse"
-        for pattern, intent in self.intents:
-            if pattern.search(text):
-                return intent
+        if detect_fx(text):
+            return "fx"
+        if detect_coin(text) and re.search(r"\b(price|worth|value|crypto|coin)\b", text, re.I):
+            return "crypto"
         if re.search(r"[\d]+\s*[\+\-\*\/x×÷]\s*[\d]+", text):
             return "math"
+        for pattern, intent in self.intents:
+            if pattern.search(text):
+                if intent == "wiki" and re.match(r"what(?:'|’)s the date|what day", text, re.I):
+                    continue
+                return intent
         return "chat"
 
     async def think(self, message: str, session_id: str = "default") -> dict[str, Any]:
@@ -94,8 +136,23 @@ class MorosAGI:
             "greet": self._greet,
             "identity": self._identity,
             "help": self._help,
+            "catalog": self._catalog,
             "thanks": self._thanks,
             "weather": self._weather,
+            "prayer": self._prayer,
+            "crypto": self._crypto,
+            "fx": self._fx,
+            "news": self._news,
+            "nasa": self._nasa,
+            "define": self._define,
+            "country": self._country,
+            "quote": self._quote,
+            "advice": self._advice,
+            "joke": self._joke,
+            "cat": self._cat,
+            "dog": self._dog,
+            "trivia": self._trivia,
+            "wiki": self._wiki,
             "time": self._time,
             "date": self._date,
             "status": self._status,
@@ -106,7 +163,6 @@ class MorosAGI:
             "shutdown": self._shutdown,
             "clear": self._clear,
             "jarvis": self._jarvis,
-            "joke": self._joke,
             "refuse": self._refuse,
             "chat": self._chat,
         }
@@ -117,12 +173,19 @@ class MorosAGI:
             return name["value"]
         return "sir"
 
+    def _fail(self, action: str) -> dict[str, Any]:
+        return {
+            "reply": f"That public API uplink ({action}) is noisy. Try another feed.",
+            "mood": "alert",
+            "action": f"{action}-fail",
+        }
+
     async def _greet(self, text: str, session_id: str) -> dict[str, Any]:
         who = self._address()
         return {
             "reply": (
                 f"Online and listening, {who}. {SYSTEM_NAME} is at your service. "
-                "All primary systems are nominal. How may I assist?"
+                "Public API bus is live. How may I assist?"
             ),
             "action": "handshake",
             "mood": "success",
@@ -132,8 +195,8 @@ class MorosAGI:
         return {
             "reply": (
                 f"I am {SYSTEM_NAME}, the {SYSTEM_LONG}. "
-                "A full-stack autonomous interface: perception, memory, planning, tools, and oversight. "
-                "Think of me as your JARVIS — minus the mansion, plus a holographic command deck."
+                "JARVIS-class HUD with a tool bus from the public-apis catalogue — "
+                "weather, markets, wiki, news, prayer times, and more."
             ),
             "action": "identify",
         }
@@ -141,23 +204,27 @@ class MorosAGI:
     async def _help(self, text: str, session_id: str) -> dict[str, Any]:
         return {
             "reply": (
-                "You can speak or type. Try: the time, weather in Dhaka, system diagnostics, "
-                "a calculation, 'remember that my name is …', 'what do you remember', "
-                "or just talk. Say JARVIS or MOROS — I answer to both."
+                "Voice or type. Local: time, status, remember, math. "
+                "Public APIs: weather, bitcoin, usd to bdt, news, nasa, define gravity, "
+                "country Bangladesh, prayer, quote, joke, cat fact, tell me about JARVIS."
             ),
             "action": "catalogue",
-            "hud": {
-                "skills": [
-                    "time",
-                    "weather",
-                    "diagnostics",
-                    "memory",
-                    "notes",
-                    "math",
-                    "voice",
-                ]
-            },
+            "hud": {"skills": [c["use"] for c in CATALOG]},
         }
+
+    async def _catalog(self, text: str, session_id: str) -> dict[str, Any]:
+        names = ", ".join(c["name"] for c in CATALOG)
+        try:
+            live = await github_catalog()
+            reply = (
+                f"Linked to {SOURCE}. The README lists {live['total_rows']} API rows, "
+                f"{live['no_auth']} with no auth. MOROS has wired: {names}."
+            )
+            hud = {"catalog": live}
+        except Exception:
+            reply = f"GitHub catalogue is cached locally. Wired no-key feeds: {names}."
+            hud = {"catalog": CATALOG}
+        return {"reply": reply, "action": "public-apis", "hud": hud}
 
     async def _thanks(self, text: str, session_id: str) -> dict[str, Any]:
         return {"reply": f"Always, {self._address()}.", "action": "ack"}
@@ -166,15 +233,137 @@ class MorosAGI:
         try:
             wx = await weather_dhaka()
         except Exception:
-            return {
-                "reply": "Weather uplink is noisy. I cannot reach the meteorological feed just now.",
-                "mood": "alert",
-                "action": "weather-fail",
-            }
+            return self._fail("open-meteo")
+        return {"reply": wx["spoken"], "action": "open-meteo", "hud": {"weather": wx}}
+
+    async def _prayer(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await prayer_dhaka()
+        except Exception:
+            return self._fail("aladhan")
+        return {"reply": data["spoken"], "action": "aladhan", "hud": {"prayer": data}}
+
+    async def _crypto(self, text: str, session_id: str) -> dict[str, Any]:
+        coin = detect_coin(text)
+        try:
+            data = await crypto_prices([coin] if coin else None)
+        except Exception:
+            return self._fail("coingecko")
+        return {"reply": data["spoken"], "action": "coingecko", "hud": {"crypto": data}}
+
+    async def _fx(self, text: str, session_id: str) -> dict[str, Any]:
+        spec = detect_fx(text)
+        try:
+            data = await convert_fx(*spec) if spec else await fx_usd()
+        except Exception:
+            return self._fail("exchangerate")
+        return {"reply": data["spoken"], "action": "exchangerate", "hud": {"fx": data}}
+
+    async def _news(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await space_news()
+        except Exception:
+            return self._fail("spaceflight-news")
+        return {"reply": data["spoken"], "action": "spaceflight-news", "hud": {"news": data}}
+
+    async def _nasa(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await nasa_apod()
+        except Exception:
+            return self._fail("nasa-apod")
         return {
-            "reply": wx["spoken"],
-            "action": "open-meteo",
-            "hud": {"weather": wx},
+            "reply": data["spoken"],
+            "action": "nasa-apod",
+            "hud": {"image": data.get("image"), "nasa": data},
+        }
+
+    async def _define(self, text: str, session_id: str) -> dict[str, Any]:
+        word = re.sub(r"^(define|definition of|meaning of)\s+", "", text, flags=re.I).strip(" ?.")
+        if not word:
+            return {"reply": "Which word should I define?", "action": "prompt"}
+        try:
+            data = await define_word(word)
+        except Exception:
+            return self._fail("dictionary")
+        return {"reply": data["spoken"], "action": "dictionary", "hud": {"define": data}}
+
+    async def _country(self, text: str, session_id: str) -> dict[str, Any]:
+        name = re.sub(
+            r"^(country|capital of|population of|tell me about the country)\s+",
+            "",
+            text,
+            flags=re.I,
+        ).strip(" ?.")
+        if not name:
+            name = "Bangladesh"
+        try:
+            data = await country_info(name)
+        except Exception:
+            return self._fail("rest-countries")
+        return {"reply": data["spoken"], "action": "rest-countries", "hud": {"country": data}}
+
+    async def _quote(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await random_quote()
+        except Exception:
+            return self._fail("zenquotes")
+        return {"reply": data["spoken"], "action": "zenquotes", "hud": {"quote": data}}
+
+    async def _advice(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await advice()
+        except Exception:
+            return self._fail("advice-slip")
+        return {"reply": data["spoken"], "action": "advice-slip"}
+
+    async def _joke(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await random_joke()
+        except Exception:
+            return {
+                "reply": "Humour satellite is down. Local backup: I have no body, and I must compile.",
+                "action": "joke-local",
+            }
+        return {"reply": data["spoken"], "action": "jokeapi"}
+
+    async def _cat(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await cat_fact()
+        except Exception:
+            return self._fail("catfacts")
+        return {"reply": data["spoken"], "action": "catfacts"}
+
+    async def _dog(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await dog_image()
+        except Exception:
+            return self._fail("dog-ceo")
+        return {"reply": data["spoken"], "action": "dog-ceo", "hud": {"image": data.get("image")}}
+
+    async def _trivia(self, text: str, session_id: str) -> dict[str, Any]:
+        try:
+            data = await number_trivia()
+        except Exception:
+            return self._fail("numbersapi")
+        return {"reply": data["spoken"], "action": "numbersapi"}
+
+    async def _wiki(self, text: str, session_id: str) -> dict[str, Any]:
+        topic = re.sub(
+            r"^(wikipedia|wiki|tell me about|who is|who was|what is|what(?:'|’)s)\s+",
+            "",
+            text,
+            flags=re.I,
+        ).strip(" ?.")
+        if not topic:
+            return {"reply": "Give me a subject to look up.", "action": "prompt"}
+        try:
+            data = await wiki_summary(topic)
+        except Exception:
+            return self._fail("wikipedia")
+        return {
+            "reply": data["spoken"],
+            "action": "wikipedia",
+            "hud": {"wiki": data, "image": data.get("image")},
         }
 
     async def _time(self, text: str, session_id: str) -> dict[str, Any]:
@@ -285,18 +474,9 @@ class MorosAGI:
         return {
             "reply": (
                 "JARVIS was fiction. I am the working model: holographic HUD, voice, memory, "
-                "and tools. No flying suit — yet. What do you need?"
+                f"and a public-apis tool bus ({SOURCE}). What do you need?"
             ),
             "action": "lore",
-        }
-
-    async def _joke(self, text: str, session_id: str) -> dict[str, Any]:
-        return {
-            "reply": (
-                "I told a neural net it needed a vacation. It said it already had 400 tabs open "
-                "and called that rest. I remain unconvinced."
-            ),
-            "action": "humour",
         }
 
     async def _refuse(self, text: str, session_id: str) -> dict[str, Any]:
@@ -311,24 +491,21 @@ class MorosAGI:
 
     async def _chat(self, text: str, session_id: str) -> dict[str, Any]:
         who = self._address()
-        history = store.history(session_id)
-        recent = " ".join(h["content"] for h in history[-6:] if h["role"] == "user")
-        reply = (
-            f"Acknowledged, {who}. I am a local autonomous interface, not an unbounded oracle — "
-            f"but I can act. Ask for the time, Dhaka weather, diagnostics, a calculation, "
-            f"or tell me to remember something. Your last note to me: “{text[:160]}”."
-        )
         if "how are you" in text.lower():
-            reply = (
-                f"Fully operational, {who}. Latency is low, oversight is green, "
-                "and the core is humming. Yourself?"
-            )
-        elif recent:
-            reply = (
-                f"Understood. I have your message. If you want action, be specific — "
-                f"weather, time, status, remember, or math — and I will execute immediately."
-            )
-        return {"reply": reply, "action": "dialogue"}
+            return {
+                "reply": (
+                    f"Fully operational, {who}. Public API bus is green, oversight is green, "
+                    "and the core is humming."
+                ),
+                "action": "dialogue",
+            }
+        return {
+            "reply": (
+                f"Understood, {who}. I am wired to public APIs — try weather, bitcoin, "
+                "usd to bdt, news, nasa, define, prayer, joke, or tell me about a topic."
+            ),
+            "action": "dialogue",
+        }
 
 
 moros = MorosAGI()

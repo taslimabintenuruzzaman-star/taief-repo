@@ -12,7 +12,8 @@ from pydantic import BaseModel, Field
 
 from backend.agent import moros
 from backend.memory import store
-from backend.tools import system_status, time_report
+from backend.public_apis import CATALOG, SOURCE, dashboard_feeds, github_catalog
+from backend.tools import system_status, time_report, weather_dhaka
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = ROOT / "frontend"
@@ -20,7 +21,7 @@ FRONTEND = ROOT / "frontend"
 app = FastAPI(
     title="MOROS AGI",
     description="Modular Operational Reasoning & Oversight System",
-    version="1.0.0",
+    version="1.1.0",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -38,7 +39,7 @@ class ChatIn(BaseModel):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "online", "system": "MOROS AGI", "version": "1.0.0"}
+    return {"status": "online", "system": "MOROS AGI", "version": "1.1.0", "apis": SOURCE}
 
 
 @app.get("/api/status")
@@ -49,6 +50,24 @@ async def status():
 @app.get("/api/memory")
 async def memory():
     return {"facts": store.recall(), "notes": store.notes()}
+
+
+@app.get("/api/catalog")
+async def catalog():
+    try:
+        return await github_catalog()
+    except Exception:
+        return {"source": SOURCE, "wired": CATALOG, "live": False}
+
+
+@app.get("/api/feeds")
+async def feeds():
+    payload = await dashboard_feeds()
+    try:
+        payload["weather"] = await weather_dhaka()
+    except Exception as exc:
+        payload["weather"] = {"error": str(exc)}
+    return payload
 
 
 @app.post("/api/chat")

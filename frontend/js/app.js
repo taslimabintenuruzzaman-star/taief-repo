@@ -4,7 +4,7 @@ const bootLines = [
   "NEURAL SUBSTRATE .............. OK",
   "SENSORY ARRAY ................. OK",
   "MEMORY LATTICE ................ OK",
-  "TOOL BUS / OPEN-METEO ......... OK",
+  "TOOL BUS / PUBLIC-APIS ........ OK",
   "OVERSIGHT PROTOCOLS ........... ACTIVE",
   "VOICE INTERFACE ............... STANDBY",
   "ALL SYSTEMS OPERATIONAL",
@@ -107,11 +107,7 @@ async function ask(message) {
     typeText($("spoken"), data.reply);
     addLog("moros", data.reply, data.mood);
     speak(data.reply);
-    if (data.hud?.weather) {
-      const w = data.hud.weather;
-      $("wx-temp").textContent = `${w.temperature_c}°C`;
-      $("wx-desc").textContent = `${w.description}  ·  humidity ${w.humidity}%`;
-    }
+    applyHud(data.hud);
   } catch {
     typeText($("spoken"), "Command deck lost the cognition bus. Retry.");
   } finally {
@@ -190,24 +186,41 @@ async function boot() {
     "MOROS online. Modular Operational Reasoning and Oversight System. All systems operational. How may I assist you?";
   typeText($("spoken"), intro);
   speak(intro);
-  setTimeout(() => preloadWeather(), 1600);
+  refreshFeeds();
 }
 
-async function preloadWeather() {
+function applyHud(hud) {
+  if (!hud) return;
+  if (hud.weather?.temperature_c != null) {
+    $("wx-temp").textContent = `${hud.weather.temperature_c}°C`;
+    $("wx-desc").textContent = `${hud.weather.description}  ·  humidity ${hud.weather.humidity}%`;
+  }
+  if (hud.crypto?.prices?.bitcoin?.usd) {
+    $("btc-val").textContent = `$${hud.crypto.prices.bitcoin.usd}`;
+  }
+  if (hud.fx?.usd_bdt) $("fx-val").textContent = hud.fx.usd_bdt;
+  if (hud.prayer?.timings?.Fajr) $("fajr-val").textContent = hud.prayer.timings.Fajr;
+  if (hud.quote?.quote) $("quote-line").textContent = `“${hud.quote.quote}” — ${hud.quote.author}`;
+  const img = $("intel-img");
+  if (hud.image) {
+    img.src = hud.image;
+    img.hidden = false;
+  }
+}
+
+async function refreshFeeds() {
   try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: "weather in Dhaka", session_id: "hud-boot" }),
-    });
+    const res = await fetch("/api/feeds");
     const data = await res.json();
-    if (data.hud?.weather) {
-      const w = data.hud.weather;
-      $("wx-temp").textContent = `${w.temperature_c}°C`;
-      $("wx-desc").textContent = `${w.description}  ·  humidity ${w.humidity}%`;
-    }
+    applyHud({
+      weather: data.weather && !data.weather.error ? data.weather : null,
+      crypto: data.crypto && !data.crypto.error ? data.crypto : null,
+      fx: data.fx && !data.fx.error ? data.fx : null,
+      prayer: data.prayer && !data.prayer.error ? data.prayer : null,
+      quote: data.quote && !data.quote.error ? data.quote : null,
+    });
   } catch {
-    /* feed optional at boot */
+    /* optional */
   }
 }
 
@@ -215,6 +228,7 @@ function main() {
   particles();
   refreshStatus();
   setInterval(refreshStatus, 4000);
+  setInterval(refreshFeeds, 120000);
   const rec = initVoice();
   $("send").onclick = () => {
     const v = $("cmd").value;

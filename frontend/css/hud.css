@@ -369,6 +369,22 @@ body {
   padding: 0 12px;
 }
 
+#intel-img {
+  max-width: 280px;
+  max-height: 140px;
+  object-fit: cover;
+  border: 1px solid rgba(0, 232, 255, 0.35);
+  box-shadow: 0 0 18px rgba(0, 232, 255, 0.25);
+}
+
+.quote {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.35;
+  margin: 0 0 10px;
+}
+
 .waveform {
   display: flex;
   gap: 4px;
