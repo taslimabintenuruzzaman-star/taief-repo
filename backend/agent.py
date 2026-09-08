@@ -492,6 +492,11 @@ class MorosAGI:
         }
 
     async def _chat(self, text: str, session_id: str) -> dict[str, Any]:
+        from backend.llm_bridge import llm_reply
+
+        hybrid = await llm_reply(text, session_id)
+        if hybrid and hybrid.get("reply"):
+            return hybrid
         who = self._address()
         if "how are you" in text.lower():
             return {
