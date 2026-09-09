@@ -80,6 +80,15 @@ async function refreshStatus() {
       <div><span>RAM</span><span>${s.memory_used_gb}/${s.memory_total_gb} GB</span></div>
     `;
     $("link-pill").textContent = "UPLINK LIVE";
+    try {
+      const b = await fetch("/api/brain").then((r) => r.json());
+      const pill = $("brain-pill");
+      if (pill) {
+        pill.textContent = b.using_api_key_brain ? "BRAIN: CLOUD KEY" : "BRAIN: LOCAL RULES";
+      }
+    } catch {
+      /* ignore */
+    }
   } catch {
     $("link-pill").textContent = "UPLINK WEAK";
   }
@@ -121,6 +130,8 @@ const voice = {
   on: false,
   buffer: "",
   sendTimer: null,
+  media: null,
+  chunks: [],
 };
 
 function hint(msg) {
@@ -238,6 +249,47 @@ function commitVoice() {
   ask(said);
 }
 
+async function startTape() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+  const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+  voice.chunks = [];
+  rec.ondataavailable = (e) => {
+    if (e.data.size) voice.chunks.push(e.data);
+  };
+  rec.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    setListening(false);
+    const blob = new Blob(voice.chunks, { type: rec.mimeType || "audio/webm" });
+    if (blob.size < 800) {
+      hint("Recording too short. Type in the box — preview iframes often block speech.");
+      $("cmd").focus();
+      return;
+    }
+    hint("Sending voice to server…");
+    const fd = new FormData();
+    fd.append("file", blob, "speech.webm");
+    try {
+      const res = await fetch("/api/stt", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.text) {
+        hint("Heard: " + data.text);
+        ask(data.text);
+      } else {
+        hint((data.error || "No speech key") + " — type below. This preview cannot hear you without Chrome STT or a Whisper key.");
+        $("cmd").focus();
+      }
+    } catch {
+      hint("STT failed. Type your message and press Enter.");
+      $("cmd").focus();
+    }
+  };
+  voice.media = rec;
+  rec.start();
+  setListening(true);
+  hint("Recording… click STOP when you finish speaking.");
+}
+
 async function toggleListen() {
   if (voice.on) {
     voice.on = false;
@@ -246,26 +298,38 @@ async function toggleListen() {
     } catch {
       /* ignore */
     }
+    if (voice.media && voice.media.state !== "inactive") {
+      voice.media.stop();
+      voice.media = null;
+      return;
+    }
     setListening(false);
     commitVoice();
     return;
   }
-  if (!RecEngine()) {
-    hint("This browser cannot do speech-to-text (common in Firefox / locked iframes). Type, or open in Chrome.");
+  const ok = await unlockMic();
+  if (!ok) {
     $("cmd").focus();
     return;
   }
-  const ok = await unlockMic();
-  if (!ok) return;
-  const rec = makeRec();
-  rec.lang = voice.lang;
-  voice.buffer = "";
-  $("cmd").value = "";
+  if (RecEngine()) {
+    const rec = makeRec();
+    rec.lang = voice.lang;
+    voice.buffer = "";
+    $("cmd").value = "";
+    try {
+      rec.start();
+      setListening(true);
+      return;
+    } catch (err) {
+      hint("Browser STT failed (" + (err.message || err) + "). Trying recorder…");
+    }
+  }
   try {
-    rec.start();
-    setListening(true);
-  } catch (err) {
-    hint("Could not start listener: " + (err.message || err));
+    await startTape();
+  } catch {
+    hint("Mic blocked in this preview. Type your words in the bar and press Enter.");
+    $("cmd").focus();
   }
 }
 

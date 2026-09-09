@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from backend.agent import moros
 from backend.memory import store
 from backend.public_apis import CATALOG, SOURCE, dashboard_feeds, github_catalog
+from backend.stt import brain_status, transcribe
 from backend.tools import system_status, time_report, weather_dhaka
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -76,6 +77,22 @@ async def feeds():
     except Exception as exc:
         payload["weather"] = {"error": str(exc)}
     return payload
+
+
+@app.get("/api/brain")
+async def brain():
+    return brain_status()
+
+
+@app.post("/api/stt")
+async def stt(file: UploadFile = File(...)):
+    blob = await file.read()
+    if not blob:
+        return {"text": "", "error": "empty audio"}
+    try:
+        return await transcribe(blob, file.filename or "speech.webm")
+    except Exception as exc:
+        return {"text": "", "error": str(exc)[:240]}
 
 
 @app.post("/api/chat")
