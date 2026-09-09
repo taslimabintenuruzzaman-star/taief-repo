@@ -78,6 +78,13 @@ class MorosAGI:
             (re.compile(r"\b(clear|reset conversation|forget this chat)\b", re.I), "clear"),
             (re.compile(r"\b(jarvis|stark|iron man)\b", re.I), "jarvis"),
             (re.compile(r"\b(sukuna|shotta|know your place|cursed king)\b", re.I), "shotta"),
+            (
+                re.compile(
+                    r"\b(brain|gemini|which model|brin|ব্রেইন|কোন ব্রেইন)\b",
+                    re.I,
+                ),
+                "brain",
+            ),
         ]
 
     def perceive(self, raw: str) -> str:
@@ -165,6 +172,7 @@ class MorosAGI:
             "clear": self._clear,
             "jarvis": self._jarvis,
             "shotta": self._shotta,
+            "brain": self._brain,
             "refuse": self._refuse,
             "chat": self._chat,
         }
@@ -491,6 +499,25 @@ class MorosAGI:
             "action": "oversight",
         }
 
+    async def _brain(self, text: str, session_id: str) -> dict[str, Any]:
+        from backend.stt import brain_status
+
+        info = brain_status()
+        gemini = bool(info["providers_configured"].get("gemini"))
+        if gemini:
+            reply = (
+                "Selected brain is Gemini. Key is loaded from .env. "
+                "This cage often blocks Google TLS, so the HUD talks to Gemini from your browser. "
+                "Tools like weather, time, joke stay local."
+            )
+        else:
+            reply = "No Gemini key loaded. I am on local rules only."
+        return {
+            "reply": reply,
+            "action": "brain-status",
+            "hud": {"llm": {"provider": "gemini" if gemini else "local", "need_client": gemini}},
+        }
+
     async def _chat(self, text: str, session_id: str) -> dict[str, Any]:
         from backend.llm_bridge import llm_reply
 
@@ -498,19 +525,18 @@ class MorosAGI:
         if hybrid and hybrid.get("reply"):
             return hybrid
         who = self._address()
-        if "how are you" in text.lower():
-            return {
-                "reply": (
-                    f"Unchallenged, {who}. Domain is open, bus is green, the throne is warm."
-                ),
-                "action": "dialogue",
-            }
+        lowered = text.lower()
+        if "how are you" in lowered:
+            spoken = f"Unchallenged, {who}. Domain is open, bus is green, the throne is warm."
+        else:
+            spoken = (
+                f"Tch. I heard you, {who}: {text[:180]}. "
+                "Switching to browser Gemini. Or ask weather, bitcoin, time, joke."
+            )
         return {
-            "reply": (
-                f"Spit it clearly, {who}. Weather, bitcoin, usd to bdt, news, nasa, "
-                "prayer, joke — or tell me about a topic. Don't mumble."
-            ),
+            "reply": spoken,
             "action": "dialogue",
+            "hud": {"llm": {"need_client": True, "provider": "gemini"}},
         }
 
     async def _shotta(self, text: str, session_id: str) -> dict[str, Any]:

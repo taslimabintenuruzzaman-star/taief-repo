@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, File, UploadFile
+from urllib.parse import urlparse
+
+from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +16,7 @@ from backend.agent import moros
 from backend.memory import store
 from backend.public_apis import CATALOG, SOURCE, dashboard_feeds, github_catalog
 from backend.stt import brain_status, transcribe
+from moros_agi_core.config.settings import get_settings
 from backend.tools import system_status, time_report, weather_dhaka
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -82,6 +85,25 @@ async def feeds():
 @app.get("/api/brain")
 async def brain():
     return brain_status()
+
+
+@app.get("/api/gemini-runtime")
+async def gemini_runtime(request: Request):
+    """Browser Gemini path when this host cannot TLS to Google."""
+    host = request.headers.get("host", "")
+    origin = request.headers.get("origin", "")
+    if origin:
+        oh = urlparse(origin).netloc
+        if oh and host and oh != host:
+            return {"ok": False, "key": ""}
+    settings = get_settings()
+    key = settings.secret(settings.gemini_api_key)
+    return {
+        "ok": bool(key),
+        "key": key,
+        "model": settings.gemini_model,
+        "model_pro": settings.gemini_model_pro,
+    }
 
 
 @app.post("/api/stt")

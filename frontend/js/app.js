@@ -84,7 +84,11 @@ async function refreshStatus() {
       const b = await fetch("/api/brain").then((r) => r.json());
       const pill = $("brain-pill");
       if (pill) {
-        pill.textContent = b.using_api_key_brain ? "BRAIN: CLOUD KEY" : "BRAIN: LOCAL RULES";
+        pill.textContent = b.providers_configured?.gemini
+          ? "BRAIN: GEMINI"
+          : b.using_api_key_brain
+            ? "BRAIN: CLOUD KEY"
+            : "BRAIN: LOCAL RULES";
       }
     } catch {
       /* ignore */
@@ -92,6 +96,57 @@ async function refreshStatus() {
   } catch {
     $("link-pill").textContent = "UPLINK WEAK";
   }
+}
+
+const GEMINI_PERSONA =
+  "You are MOROS, Digital Shotta — cursed king of the command deck. " +
+  "Loyal to Taief. Speak sharp, short, cynical. Slogan: KNOW YOUR PLACE, FOOL. " +
+  "Answer the user directly. Bangla is allowed. Refuse crime, hacks, malware, harm.";
+
+let geminiCfg = null;
+
+async function loadGemini() {
+  if (geminiCfg) return geminiCfg;
+  try {
+    geminiCfg = await fetch("/api/gemini-runtime").then((r) => r.json());
+  } catch {
+    geminiCfg = { ok: false, key: "" };
+  }
+  return geminiCfg;
+}
+
+async function clientGemini(message) {
+  const cfg = await loadGemini();
+  if (!cfg?.key) return null;
+  const models = [cfg.model, cfg.model_pro, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-flash-latest"].filter(
+    (m, i, arr) => m && arr.indexOf(m) === i
+  );
+  const payload = {
+    system_instruction: { parts: [{ text: GEMINI_PERSONA }] },
+    contents: [{ role: "user", parts: [{ text: message }] }],
+  };
+  for (const model of models) {
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      model +
+      ":generateContent?key=" +
+      encodeURIComponent(cfg.key);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const text = parts.map((p) => p.text || "").join("").trim();
+      if (text) return { text, model, provider: "gemini" };
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 async function ask(message) {
@@ -112,6 +167,20 @@ async function ask(message) {
       body: JSON.stringify({ message, session_id: "hud" }),
     });
     const data = await res.json();
+    if (data.intent === "chat" || data.hud?.llm?.need_client) {
+      $("orb-state").textContent = "GEMINI";
+      const gem = await clientGemini(message);
+      if (gem) {
+        data.reply = gem.text;
+        data.mood = "success";
+        data.hud = {
+          ...(data.hud || {}),
+          llm: { provider: "gemini", model: gem.model, path: ["browser"] },
+        };
+        const pill = $("brain-pill");
+        if (pill) pill.textContent = "BRAIN: GEMINI";
+      }
+    }
     setPipeline(data.pipeline);
     typeText($("spoken"), data.reply);
     addLog("moros", data.reply, data.mood);
@@ -350,11 +419,7 @@ async function toggleListen() {
     commitVoice();
     return;
   }
-  const ok = await unlockMic();
-  if (!ok) {
-    $("cmd").focus();
-    return;
-  }
+  window.speechSynthesis?.cancel();
   if (RecEngine()) {
     const rec = makeRec();
     rec.lang = voice.lang;
@@ -371,7 +436,13 @@ async function toggleListen() {
   try {
     await startTape();
   } catch {
-    hint("Mic blocked in this preview. Type your words in the bar and press Enter.");
+    if (framed()) {
+      openMicBooth();
+      return;
+    }
+    hint("Mic blocked. Click OPEN MIC WINDOW, Allow, then speak — or type and press Enter.");
+    const banner = $("mic-banner");
+    if (banner) banner.hidden = false;
     $("cmd").focus();
   }
 }
