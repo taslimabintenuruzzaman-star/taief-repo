@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MOROS — Digital Shotta</title>
+    <link rel="icon" href="/assets/shotta.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/hud.css" />
+  </head>
+  <body>
+    <div id="boot">
+      <div class="boot-frame">
+        <img src="/assets/shotta.png" alt="Digital shotta" class="boot-core" />
+        <p class="boot-brand">MOROS</p>
+        <p class="boot-sub">DIGITAL SHOTTA // KNOW YOUR PLACE, FOOL</p>
+        <ul id="boot-log"></ul>
+        <div class="boot-bar"><span id="boot-fill"></span></div>
+      </div>
+    </div>
+
+    <div id="hud" hidden>
+      <canvas id="field"></canvas>
+      <div class="scanlines"></div>
+      <div class="vignette"></div>
+
+      <header class="top">
+        <div class="brand">
+          <img src="/assets/shotta.png" alt="" />
+          <div>
+            <strong>MOROS SHOTTA</strong>
+            <span>DIGITAL KING // v1.2 // CURSED UPLINK</span>
+          </div>
+        </div>
+        <div class="top-center">
+          <span id="clock">00:00:00</span>
+          <span id="date-line">DHAKA</span>
+        </div>
+        <div class="top-right">
+          <span class="pill" id="link-pill">UPLINK LIVE</span>
+          <span class="pill dim">DOMAIN: OPEN</span>
+        </div>
+      </header>
+
+      <aside class="panel left">
+        <h2>SYSTEM LATTICE</h2>
+        <div class="meter">
+          <label>CPU</label>
+          <div class="track"><i id="cpu-bar"></i></div>
+          <em id="cpu-val">—</em>
+        </div>
+        <div class="meter">
+          <label>MEM</label>
+          <div class="track"><i id="mem-bar"></i></div>
+          <em id="mem-val">—</em>
+        </div>
+        <div class="meter">
+          <label>DSK</label>
+          <div class="track"><i id="dsk-bar"></i></div>
+          <em id="dsk-val">—</em>
+        </div>
+        <dl class="kv" id="sys-kv"></dl>
+        <h2>PIPELINE</h2>
+        <ol id="pipeline">
+          <li>PERCEIVE</li>
+          <li>RECALL</li>
+          <li>PLAN</li>
+          <li>ACT</li>
+          <li>RESPOND</li>
+        </ol>
+      </aside>
+
+      <main class="stage">
+        <div class="rings">
+          <div class="ring r1"></div>
+          <div class="ring r2"></div>
+          <div class="ring r3"></div>
+          <div class="ring r4"></div>
+          <button id="orb" type="button" aria-label="Activate voice">
+            <img src="/assets/shotta.png" alt="Digital shotta" />
+            <span id="orb-state">STANDBY</span>
+          </button>
+        </div>
+        <p class="slogan">KNOW YOUR PLACE, FOOL.</p>
+        <p id="spoken" class="spoken">The king is listening.</p>
+        <img id="intel-img" alt="" hidden />
+        <div id="waveform" class="waveform" hidden>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </main>
+
+      <aside class="panel right">
+        <h2>ATMOSPHERICS</h2>
+        <div id="weather-box" class="weather">
+          <p>DHAKA NODE</p>
+          <strong id="wx-temp">—</strong>
+          <span id="wx-desc">awaiting feed</span>
+        </div>
+        <h2>PUBLIC UPLINKS</h2>
+        <dl class="kv" id="feeds-kv">
+          <div><span>BTC</span><span id="btc-val">—</span></div>
+          <div><span>USD/BDT</span><span id="fx-val">—</span></div>
+          <div><span>FAJR</span><span id="fajr-val">—</span></div>
+        </dl>
+        <p id="quote-line" class="quote">the king does not wait…</p>
+        <h2>MISSION LOG</h2>
+        <div id="log" class="log"></div>
+      </aside>
+
+      <footer class="console">
+        <button id="mic" type="button" title="Hold to speak / চেপে ধরে কথা বলো">MIC</button>
+        <input
+          id="cmd"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="MIC চেপে ধরো · Bangla/English · type if mic is blocked"
+        />
+        <button id="lang" type="button" title="Speech language">BN</button>
+        <button id="send" type="button">BOW</button>
+      </footer>
+      <p id="voice-hint" class="voice-hint">MIC চেপে ধরে কথা বলো। Allow microphone when asked.</p>
+    </div>
+
+    <script src="/js/app.js"></script>
+  </body>
+</html>
