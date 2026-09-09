@@ -117,10 +117,10 @@ async function ask(message) {
 
 const voice = {
   rec: null,
-  lang: "bn-BD",
-  holding: false,
-  armed: false,
-  stream: null,
+  lang: "en-US",
+  on: false,
+  buffer: "",
+  sendTimer: null,
 };
 
 function hint(msg) {
@@ -129,119 +129,143 @@ function hint(msg) {
 }
 
 function setListening(on) {
+  voice.on = on;
   $("orb").classList.toggle("listening", on);
   $("mic").classList.toggle("hot", on);
+  $("mic").textContent = on ? "STOP" : "MIC";
   $("waveform").hidden = !on;
   $("orb-state").textContent = on ? "LISTENING" : "STANDBY";
 }
 
-async function unlockMic() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    hint("This browser has no microphone API. Chrome খুলো, বা টাইপ করো.");
-    return false;
-  }
-  try {
-    if (!voice.stream) {
-      voice.stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
-      });
-    }
-    voice.armed = true;
-    return true;
-  } catch (err) {
-    const name = err?.name || "denied";
-    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-      hint("Microphone blocked. Address bar এ Allow চাপো, বা preview কে new tab-এ খোলো.");
-    } else if (name === "NotFoundError") {
-      hint("কোনো মাইক পাইনি. হেডফোন/মাইক লাগাও.");
-    } else {
-      hint(`Mic error: ${name}. Type in the bar instead.`);
-    }
-    return false;
-  }
+function RecEngine() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
-function initVoice() {
-  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!Rec) {
-    hint("Speech engine missing (Firefox/iframe). Chrome/Edge use করো, বা টাইপ করো.");
-    return null;
-  }
-  const rec = new Rec();
+function wireRec(rec) {
   rec.lang = voice.lang;
   rec.interimResults = true;
   rec.continuous = true;
-  rec.maxAlternatives = 1;
+  rec.maxAlternatives = 3;
   rec.onstart = () => {
     setListening(true);
-    hint(voice.lang === "bn-BD" ? "শুনছি… Bangla-এ কথা বলো." : "Listening… speak now.");
+    window.speechSynthesis?.cancel();
+    hint("I am listening. Speak. Click STOP when done.");
+    $("spoken").textContent = "…listening…";
   };
   rec.onerror = (ev) => {
     const err = ev.error;
-    if (err === "not-allowed") hint("Mic permission denied. Allow microphone, then hold MIC.");
-    else if (err === "no-speech") hint("কিছু শুনিনি. MIC চেপে ধরে আবার বলো.");
-    else if (err === "audio-capture") hint("মাইক ক্যাপচার ব্যর্থ. Device check করো.");
-    else if (err === "network") hint("Speech network error. Internet/Chrome লাগবে.");
-    else hint(`Voice error: ${err}`);
+    if (err === "not-allowed") {
+      hint("Microphone blocked. Click Allow, or open this preview in a new tab (Chrome).");
+      setListening(false);
+    } else if (err === "no-speech") {
+      hint("Heard silence. Keep talking — I am still listening.");
+    } else if (err === "network") {
+      hint("Speech needs Chrome + internet. Type below if this preview iframe blocks the mic.");
+    } else if (err !== "aborted") {
+      hint(`Voice error: ${err}. You can type instead.`);
+    }
   };
   rec.onresult = (ev) => {
-    let finalTxt = "";
     let live = "";
-    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+    let finals = [];
+    for (let i = 0; i < ev.results.length; i++) {
       const t = ev.results[i][0].transcript;
-      if (ev.results[i].isFinal) finalTxt += t;
+      if (ev.results[i].isFinal) finals.push(t);
       else live += t;
     }
-    const shown = (finalTxt || live).trim();
-    if (shown) $("cmd").value = shown;
-    if (finalTxt.trim()) {
-      $("cmd").value = finalTxt.trim();
-      hint(`Heard: ${finalTxt.trim()}`);
+    const heard = (finals.join(" ") + " " + live).trim();
+    voice.buffer = heard;
+    $("cmd").value = heard;
+    $("spoken").textContent = heard || "…listening…";
+    hint("Heard: " + heard);
+    clearTimeout(voice.sendTimer);
+    if (finals.length && !live) {
+      voice.sendTimer = setTimeout(() => commitVoice(), 900);
     }
   };
   rec.onend = () => {
-    setListening(false);
-    if (voice.holding) {
+    if (voice.on) {
       try {
         rec.start();
       } catch {
-        /* already started */
+        setTimeout(() => {
+          if (voice.on) {
+            try {
+              rec.start();
+            } catch {
+              /* give up */
+            }
+          }
+        }, 250);
       }
     }
   };
+}
+
+function makeRec() {
+  const Engine = RecEngine();
+  if (!Engine) return null;
+  const rec = new Engine();
+  wireRec(rec);
   voice.rec = rec;
   return rec;
 }
 
-async function startListen() {
-  const rec = voice.rec || initVoice();
-  if (!rec) return;
-  const ok = await unlockMic();
-  if (!ok) return;
-  rec.lang = voice.lang;
-  voice.holding = true;
+async function unlockMic() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    hint("No microphone API here. Use Chrome, or type.");
+    return false;
+  }
   try {
-    rec.start();
-  } catch {
-    /* InvalidStateError = already running */
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+    return true;
+  } catch (err) {
+    hint("Allow microphone when the browser asks. If nothing pops up, open preview in a new tab.");
+    return false;
   }
 }
 
-function stopListen() {
-  voice.holding = false;
-  const rec = voice.rec;
-  const said = ($("cmd").value || "").trim();
-  try {
-    rec && rec.stop();
-  } catch {
-    /* ignore */
+function commitVoice() {
+  clearTimeout(voice.sendTimer);
+  const said = (voice.buffer || $("cmd").value || "").trim();
+  voice.buffer = "";
+  if (!said) {
+    hint("I did not catch words. Click MIC, wait for LISTENING, then speak clearly.");
+    return;
   }
-  setListening(false);
-  if (said) {
-    $("cmd").value = "";
-    ask(said);
-  } else {
-    hint("কিছু ধরা পড়েনি. MIC চেপে ধরে স্পষ্ট করে বলো, বা টাইপ করো.");
+  $("cmd").value = "";
+  ask(said);
+}
+
+async function toggleListen() {
+  if (voice.on) {
+    voice.on = false;
+    try {
+      voice.rec && voice.rec.stop();
+    } catch {
+      /* ignore */
+    }
+    setListening(false);
+    commitVoice();
+    return;
+  }
+  if (!RecEngine()) {
+    hint("This browser cannot do speech-to-text (common in Firefox / locked iframes). Type, or open in Chrome.");
+    $("cmd").focus();
+    return;
+  }
+  const ok = await unlockMic();
+  if (!ok) return;
+  const rec = makeRec();
+  rec.lang = voice.lang;
+  voice.buffer = "";
+  $("cmd").value = "";
+  try {
+    rec.start();
+    setListening(true);
+  } catch (err) {
+    hint("Could not start listener: " + (err.message || err));
   }
 }
 
@@ -332,7 +356,6 @@ function main() {
   refreshStatus();
   setInterval(refreshStatus, 4000);
   setInterval(refreshFeeds, 120000);
-  const rec = initVoice();
   $("send").onclick = () => {
     const v = $("cmd").value;
     $("cmd").value = "";
@@ -345,9 +368,23 @@ function main() {
       ask(v);
     }
   });
-  const listen = () => rec && rec.start();
-  $("mic").onclick = listen;
-  $("orb").onclick = listen;
+  if ($("lang")) {
+    $("lang").textContent = "EN";
+    $("lang").onclick = () => {
+      voice.lang = voice.lang === "bn-BD" ? "en-US" : "bn-BD";
+      if (voice.rec) voice.rec.lang = voice.lang;
+      $("lang").textContent = voice.lang === "bn-BD" ? "BN" : "EN";
+      hint(voice.lang === "bn-BD" ? "Bangla speech on. Click MIC, then speak." : "English speech on. Click MIC, then speak.");
+    };
+  }
+  $("mic").onclick = (e) => {
+    e.preventDefault();
+    toggleListen();
+  };
+  $("orb").onclick = (e) => {
+    e.preventDefault();
+    toggleListen();
+  };
   boot();
 }
 
