@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MOROS MIC</title>
+    <link rel="icon" href="/assets/shotta.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=Share+Tech+Mono&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --cyan: #ff2a2a;
+        --gold: #ffb347;
+        --text: #ffd6d6;
+        --muted: #a87878;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body {
+        min-height: 100%;
+        background: radial-gradient(circle at 50% 20%, #2a0608, #070308 70%);
+        color: var(--text);
+        font-family: "Share Tech Mono", monospace;
+        text-align: center;
+      }
+      body {
+        padding: 24px 18px 32px;
+      }
+      img.face {
+        width: 180px;
+        height: 260px;
+        object-fit: cover;
+        object-position: center 16%;
+        border: 1px solid rgba(255, 42, 42, 0.55);
+        box-shadow: 0 0 36px rgba(255, 30, 30, 0.45);
+      }
+      h1 {
+        font-family: "Orbitron", sans-serif;
+        letter-spacing: 0.28em;
+        font-size: 0.95rem;
+        margin: 16px 0 8px;
+      }
+      #state {
+        color: var(--gold);
+        letter-spacing: 0.18em;
+        margin-bottom: 12px;
+      }
+      #heard {
+        min-height: 3.4em;
+        line-height: 1.4;
+        font-size: 1.05rem;
+        margin: 12px 0 18px;
+      }
+      #tap {
+        width: min(340px, 92vw);
+        height: 88px;
+        border: 1px solid var(--cyan);
+        background: rgba(255, 42, 42, 0.16);
+        color: var(--cyan);
+        font-family: "Orbitron", sans-serif;
+        letter-spacing: 0.16em;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      #tap.hot {
+        border-color: var(--gold);
+        color: var(--gold);
+        box-shadow: 0 0 24px rgba(255, 180, 70, 0.35);
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        margin-top: 14px;
+      }
+      .row button {
+        border: 1px solid var(--cyan);
+        background: transparent;
+        color: var(--cyan);
+        font-family: "Orbitron", sans-serif;
+        letter-spacing: 0.12em;
+        padding: 10px 14px;
+        cursor: pointer;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 0.78rem;
+        margin-top: 16px;
+        line-height: 1.45;
+      }
+      .eq {
+        display: flex;
+        gap: 4px;
+        height: 28px;
+        justify-content: center;
+        align-items: flex-end;
+        margin: 10px 0;
+        visibility: hidden;
+      }
+      .eq.on {
+        visibility: visible;
+      }
+      .eq i {
+        width: 4px;
+        height: 30%;
+        background: var(--cyan);
+        animation: eq 0.7s ease-in-out infinite;
+      }
+      .eq i:nth-child(odd) {
+        animation-delay: 0.12s;
+      }
+      @keyframes eq {
+        50% {
+          height: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <img class="face" src="/assets/shotta.png" alt="Digital shotta" />
+    <h1>MOROS MIC</h1>
+    <p id="state">TAP TO SPEAK</p>
+    <div class="eq" id="eq"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <p id="heard">This window can use the microphone. Tap the big button, click Allow, then speak.</p>
+    <button id="tap" type="button">TAP TO SPEAK</button>
+    <div class="row">
+      <button id="lang" type="button">EN</button>
+      <button id="send" type="button">SEND</button>
+      <button id="stop" type="button">STOP</button>
+    </div>
+    <p class="hint" id="hint">
+      Chrome or Edge. Allow microphone when asked. Speak, then SEND — or pause and I send it back to the HUD.
+    </p>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const voice = {
+        lang: params.get("lang") || "en-US",
+        rec: null,
+        on: false,
+        buffer: "",
+        media: null,
+        chunks: [],
+        timer: null,
+      };
+
+      const $ = (id) => document.getElementById(id);
+
+      function ping(event, text) {
+        const payload = { type: "moros-voice", event, text: text || "" };
+        try {
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(payload, location.origin);
+          }
+        } catch {
+          /* opener gone */
+        }
+      }
+
+      function RecEngine() {
+        return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+      }
+
+      function setOn(on) {
+        voice.on = on;
+        $("tap").classList.toggle("hot", on);
+        $("tap").textContent = on ? "LISTENING — TAP TO STOP" : "TAP TO SPEAK";
+        $("state").textContent = on ? "LISTENING" : "STANDBY";
+        $("eq").classList.toggle("on", on);
+      }
+
+      function commit(text) {
+        const said = (text || voice.buffer || "").trim();
+        voice.buffer = "";
+        if (!said) {
+          $("hint").textContent = "No words caught. Tap again, Allow the mic, speak clearly.";
+          ping("status", "No words caught in mic window.");
+          return;
+        }
+        $("heard").textContent = said;
+        ping("final", said);
+        $("hint").textContent = "Sent to the shotta. You can close this window or speak again.";
+      }
+
+      function wireRec(rec) {
+        rec.lang = voice.lang;
+        rec.interimResults = true;
+        rec.continuous = true;
+        rec.maxAlternatives = 3;
+        rec.onstart = () => {
+          setOn(true);
+          window.speechSynthesis?.cancel();
+          $("heard").textContent = "…listening…";
+          $("hint").textContent = "Speak now. I will type what I hear.";
+          ping("status", "Mic window is listening.");
+        };
+        rec.onerror = (ev) => {
+          const err = ev.error;
+          if (err === "not-allowed") {
+            $("hint").textContent =
+              "Microphone blocked. Click the lock icon in this window’s address bar → Allow microphone.";
+            setOn(false);
+            ping("status", "Mic permission denied in the mic window.");
+          } else if (err === "no-speech") {
+            $("hint").textContent = "Silence. Keep talking.";
+          } else if (err === "network") {
+            $("hint").textContent = "Browser speech network error. Trying recorder instead…";
+            stopRec();
+            startTape().catch(() => {
+              $("hint").textContent = "Recorder failed. Type in the HUD instead.";
+            });
+          } else if (err !== "aborted") {
+            $("hint").textContent = "Voice error: " + err;
+          }
+        };
+        rec.onresult = (ev) => {
+          let live = "";
+          const finals = [];
+          for (let i = 0; i < ev.results.length; i++) {
+            const t = ev.results[i][0].transcript;
+            if (ev.results[i].isFinal) finals.push(t);
+            else live += t;
+          }
+          const heard = (finals.join(" ") + " " + live).trim();
+          voice.buffer = heard;
+          $("heard").textContent = heard || "…listening…";
+          ping("interim", heard);
+          clearTimeout(voice.timer);
+          if (finals.length && !live) {
+            voice.timer = setTimeout(() => {
+              stopRec();
+              commit(voice.buffer);
+            }, 900);
+          }
+        };
+        rec.onend = () => {
+          if (voice.on) {
+            try {
+              rec.start();
+            } catch {
+              setTimeout(() => {
+                if (voice.on) {
+                  try {
+                    rec.start();
+                  } catch {
+                    /* give up */
+                  }
+                }
+              }, 250);
+            }
+          }
+        };
+      }
+
+      function stopRec() {
+        voice.on = false;
+        try {
+          voice.rec && voice.rec.stop();
+        } catch {
+          /* ignore */
+        }
+        if (voice.media && voice.media.state !== "inactive") {
+          voice.media.stop();
+          voice.media = null;
+          return;
+        }
+        setOn(false);
+      }
+
+      async function startTape() {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true },
+        });
+        const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : MediaRecorder.isTypeSupported("audio/webm")
+            ? "audio/webm"
+            : "";
+        const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+        voice.chunks = [];
+        rec.ondataavailable = (e) => {
+          if (e.data.size) voice.chunks.push(e.data);
+        };
+        rec.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          setOn(false);
+          const blob = new Blob(voice.chunks, { type: rec.mimeType || "audio/webm" });
+          if (blob.size < 800) {
+            $("hint").textContent = "Recording too short. Tap and speak longer.";
+            return;
+          }
+          $("hint").textContent = "Sending voice to the shotta…";
+          const fd = new FormData();
+          fd.append("file", blob, "speech.webm");
+          try {
+            const res = await fetch("/api/stt", { method: "POST", body: fd });
+            const data = await res.json();
+            if (data.text) commit(data.text);
+            else $("hint").textContent = (data.error || "No transcript") + " — type in the HUD.";
+          } catch {
+            $("hint").textContent = "Upload failed. Type in the HUD.";
+          }
+        };
+        voice.media = rec;
+        rec.start();
+        setOn(true);
+        $("hint").textContent = "Recording. Tap STOP when you finish.";
+        ping("status", "Mic window is recording.");
+      }
+
+      async function startListen() {
+        if (voice.on) {
+          stopRec();
+          if (voice.buffer) commit(voice.buffer);
+          return;
+        }
+        window.speechSynthesis?.cancel();
+        const Engine = RecEngine();
+        if (Engine) {
+          const rec = new Engine();
+          wireRec(rec);
+          voice.rec = rec;
+          rec.lang = voice.lang;
+          voice.buffer = "";
+          try {
+            rec.start();
+            setOn(true);
+            return;
+          } catch (err) {
+            $("hint").textContent = "STT failed (" + (err.message || err) + "). Trying recorder…";
+          }
+        }
+        try {
+          await startTape();
+        } catch (err) {
+          $("hint").textContent =
+            "Allow microphone in THIS window (lock icon → Site settings). Error: " +
+            (err.name || err.message || err);
+          ping("status", "Mic still blocked in the mic window.");
+        }
+      }
+
+      $("tap").onclick = () => startListen();
+      $("stop").onclick = () => {
+        stopRec();
+        if (voice.buffer) commit(voice.buffer);
+      };
+      $("send").onclick = () => {
+        stopRec();
+        commit(voice.buffer || $("heard").textContent);
+      };
+      $("lang").onclick = () => {
+        voice.lang = voice.lang === "bn-BD" ? "en-US" : "bn-BD";
+        if (voice.rec) voice.rec.lang = voice.lang;
+        $("lang").textContent = voice.lang === "bn-BD" ? "BN" : "EN";
+      };
+      $("lang").textContent = voice.lang === "bn-BD" ? "BN" : "EN";
+      window.addEventListener("beforeunload", () => ping("closed", ""));
+      ping("status", "Mic window ready. Tap TAP TO SPEAK.");
+    </script>
+  </body>
+</html>

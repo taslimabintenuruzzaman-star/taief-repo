@@ -105,6 +105,11 @@ async def index():
     return FileResponse(FRONTEND / "index.html")
 
 
+@app.get("/voice")
+async def voice_booth():
+    return FileResponse(FRONTEND / "voice.html")
+
+
 app.mount("/css", StaticFiles(directory=FRONTEND / "css"), name="css")
 app.mount("/js", StaticFiles(directory=FRONTEND / "js"), name="js")
 app.mount("/assets", StaticFiles(directory=FRONTEND / "assets"), name="assets")

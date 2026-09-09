@@ -132,7 +132,16 @@ const voice = {
   sendTimer: null,
   media: null,
   chunks: [],
+  booth: null,
 };
+
+function framed() {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
 
 function hint(msg) {
   const el = $("voice-hint");
@@ -222,19 +231,53 @@ function makeRec() {
   return rec;
 }
 
-async function unlockMic() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    hint("No microphone API here. Use Chrome, or type.");
+function openMicBooth() {
+  const url = `/voice?lang=${encodeURIComponent(voice.lang)}`;
+  let booth = null;
+  try {
+    booth = window.open(url, "moros-mic", "popup=yes,width=440,height=740");
+  } catch {
+    booth = null;
+  }
+  voice.booth = booth;
+  const banner = $("mic-banner");
+  if (!booth) {
+    hint("Popup blocked. Click OPEN MIC WINDOW (allow popups), then TAP TO SPEAK there.");
+    if (banner) banner.hidden = false;
     return false;
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    stream.getTracks().forEach((t) => t.stop());
-    return true;
-  } catch (err) {
-    hint("Allow microphone when the browser asks. If nothing pops up, open preview in a new tab.");
-    return false;
+    booth.focus();
+  } catch {
+    /* ignore */
   }
+  hint("Mic window opened. Click TAP TO SPEAK, Allow microphone, then talk.");
+  setListening(true);
+  if (banner) banner.hidden = false;
+  return true;
+}
+
+function onMicClick(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (voice.on && !(voice.booth && !voice.booth.closed)) {
+    toggleListen();
+    return;
+  }
+  if (voice.booth && !voice.booth.closed) {
+    try {
+      voice.booth.focus();
+    } catch {
+      /* ignore */
+    }
+    hint("Speak in the MIC WINDOW. Click TAP TO SPEAK if it is waiting.");
+    return;
+  }
+  if (framed()) {
+    openMicBooth();
+    return;
+  }
+  toggleListen();
 }
 
 function commitVoice() {
@@ -441,14 +484,39 @@ function main() {
       hint(voice.lang === "bn-BD" ? "Bangla speech on. Click MIC, then speak." : "English speech on. Click MIC, then speak.");
     };
   }
-  $("mic").onclick = (e) => {
-    e.preventDefault();
-    toggleListen();
-  };
-  $("orb").onclick = (e) => {
-    e.preventDefault();
-    toggleListen();
-  };
+  $("mic").onclick = onMicClick;
+  $("orb").onclick = onMicClick;
+  if ($("mic-window")) {
+    $("mic-window").addEventListener("click", () => {
+      hint("Mic window opening. Click TAP TO SPEAK, Allow microphone, then talk.");
+      setListening(true);
+    });
+  }
+  window.addEventListener("message", (ev) => {
+    if (ev.origin !== location.origin) return;
+    const data = ev.data || {};
+    if (data.type !== "moros-voice") return;
+    if (data.event === "interim" && data.text) {
+      voice.buffer = data.text;
+      $("cmd").value = data.text;
+      $("spoken").textContent = data.text;
+      hint("Heard: " + data.text);
+      setListening(true);
+    }
+    if (data.event === "final" && data.text) {
+      voice.buffer = data.text;
+      $("cmd").value = data.text;
+      setListening(false);
+      commitVoice();
+    }
+    if (data.event === "status" && data.text) hint(data.text);
+    if (data.event === "closed") setListening(false);
+  });
+  if (framed()) {
+    const banner = $("mic-banner");
+    if (banner) banner.hidden = false;
+    hint("Preview iframe blocks the mic. Click MIC or OPEN MIC WINDOW, Allow, then speak.");
+  }
   boot();
 }
 

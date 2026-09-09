@@ -11,7 +11,7 @@
       href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/css/hud.css?v=4" />
+    <link rel="stylesheet" href="/css/hud.css?v=5" />
   </head>
   <body>
     <div id="boot">
@@ -114,20 +114,26 @@
       </aside>
 
       <footer class="console">
-        <button id="mic" type="button" title="Hold to speak / চেপে ধরে কথা বলো">MIC</button>
+        <button id="mic" type="button" title="Open microphone">MIC</button>
         <input
           id="cmd"
           type="text"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Click MIC → speak → I type what I hear. Or just type here."
+          placeholder="MIC opens a listen window. Or type here and press Enter."
         />
         <button id="lang" type="button" title="Speech language">EN</button>
         <button id="send" type="button">BOW</button>
       </footer>
-      <p id="voice-hint" class="voice-hint">Type below and press Enter — that always works. MIC needs Chrome + Allow.</p>
+      <p id="voice-hint" class="voice-hint">
+        This preview box usually blocks the mic. Click MIC — a listen window opens. Allow microphone there, then speak.
+      </p>
+      <div id="mic-banner" hidden>
+        <span>Mic is blocked inside this preview iframe.</span>
+        <a id="mic-window" href="/voice" target="moros-mic" rel="opener">OPEN MIC WINDOW</a>
+      </div>
     </div>
 
-    <script src="/js/app.js?v=4"></script>
+    <script src="/js/app.js?v=5"></script>
   </body>
 </html>

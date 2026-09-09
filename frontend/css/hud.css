@@ -482,6 +482,37 @@ body {
   padding: 0 8px 6px;
 }
 
+#mic-banner {
+  grid-column: 1 / -1;
+  position: relative;
+  z-index: 3;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: 8px 12px 10px;
+  font-family: "Share Tech Mono", monospace;
+  font-size: 0.78rem;
+  color: var(--gold);
+}
+
+#mic-banner[hidden] {
+  display: none;
+}
+
+#mic-window {
+  font-family: "Orbitron", sans-serif;
+  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  border: 1px solid var(--gold);
+  background: rgba(255, 179, 71, 0.12);
+  color: var(--gold);
+  padding: 8px 12px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
 #lang {
   font-family: "Orbitron", sans-serif;
   letter-spacing: 0.14em;
